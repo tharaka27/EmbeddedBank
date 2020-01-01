@@ -3,6 +3,7 @@ package apiService;
 
 import java.sql.SQLException;
 
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
@@ -15,9 +16,14 @@ import javax.ws.rs.core.Response;
 import org.codehaus.jettison.json.JSONException;
 import org.codehaus.jettison.json.JSONObject;
 
+import DAO.AccountDAO;
+import DAO.MobileTDAO;
+import impl_dao.SqlAccountDAO;
+import impl_dao.SqlMobileTDAO;
+import model.Account;
+import model.Mobilet;
 import response.AuthenticationResponse;
 import util.JwTokenHelper;
-import embeddedbankDAO.authService;
 
 @Path("/")
 public class homeApiService extends BaseApiService {
@@ -25,20 +31,18 @@ public class homeApiService extends BaseApiService {
 	@POST
 	@Path(value="auth")
 	@Produces(MediaType.APPLICATION_JSON)
-	
 	public Response authorizationService(
-			@HeaderParam("MBA_ID") String MBA_ID,
-			@HeaderParam("password") String password) throws JSONException, SQLException {
+			@DefaultValue("") @HeaderParam("MBA_ID") String MBA_ID,
+			@DefaultValue("") @HeaderParam("password") String password) throws JSONException, SQLException, ClassNotFoundException, IllegalAccessException {
 		
 		AuthenticationResponse ar = new AuthenticationResponse();
-	    authService auth = new authService();
-	    //System.out.println(userName);
-	    //System.out.println(password);
+	    util.authService auth = new util.authService();
+	    
 		/*
 		 * Check whether the userName filed is empty in the message
-		 * throw error : "authorized unsuccessfully. username is empty"
+		 * throw error : "authorized unsuccessfully. user name is empty"
 		 */
-		if(MBA_ID.isEmpty()) {
+		if(MBA_ID.isEmpty() || MBA_ID == "") {
 			return ar.errorNoMBA_ID();
 		}
 		
@@ -46,7 +50,7 @@ public class homeApiService extends BaseApiService {
 		 * Check whether the Password filed is empty in the message
 		 * throw error : "authorized unsuccessfully. password is empty"
 		 */
-		else if(password.isEmpty()) {
+		else if(password.isEmpty() || password == null) {
 			return ar.errorNoPASSWORD();
 		}
 		
@@ -54,7 +58,7 @@ public class homeApiService extends BaseApiService {
 		 * Check whether the userName and Password is correct 
 		 * throw error : "authorized unsuccessfully. password incorrect"
 		 */
-		int customer_ID = auth.validateUnsuccessfull(MBA_ID, password);
+		int customer_ID = auth.validateUsingFunction(MBA_ID, password);
 		//System.out.println(customer_ID);
 		
 		if( customer_ID == 0) {
@@ -70,18 +74,16 @@ public class homeApiService extends BaseApiService {
 		return ar.success(privateKey);
 	}
 	
+	
 	@GET
-	@Path("allDevices")
+	@Path("ping")
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response getAllDevices() {
-		System.out.println("Method called");
 	      JSONObject obj = new JSONObject();
 	      
 
 	      try {
-	    	  obj.put("hello", "world");
-	    	  obj.put("nigga", "world");
-	    	  obj.put("bla bla", "world");
+	    	  obj.put("status", "server alive");
 	      
 	      	} catch (JSONException e) {
 			
@@ -99,24 +101,142 @@ public class homeApiService extends BaseApiService {
 	@POST
 	@Path("mDeposit")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Response mobileDeposit() {
-		System.out.println("mobile deposit called");
-	      JSONObject obj = new JSONObject();
-	      
-
-	      try {
-	    	  obj.put("hello", "world");
-	    	  obj.put("nigga", "world");
-	    	  obj.put("bla bla", "world");
-	      
-	      	} catch (JSONException e) {
+	public Response mobileDeposit(
+			@DefaultValue("") @HeaderParam("agent_ID") String agent_ID_arg,
+			@DefaultValue("") @HeaderParam("amount") String amount_arg,
+			@DefaultValue("") @HeaderParam("account_ID") String account_ID_arg,
+			@DefaultValue("") @HeaderParam("MU_ID") String MU_ID_arg)  {
+		//System.out.println("mobile deposit called");
+	     JSONObject obj = new JSONObject();
+	     
+			/*
+			 *  call mobile deposit functionality
+			 * 
+			 * */
+	    int agent_ID = Integer.parseInt(agent_ID_arg);
+	    int amount = Integer.parseInt(amount_arg);
+	    int account_ID = Integer.parseInt(account_ID_arg);
+	    int MU_ID = Integer.parseInt(MU_ID_arg);
+	    
+	    
+		MobileTDAO accountManager = new SqlMobileTDAO();
+		Mobilet at = new Mobilet();
+		at.setAgent_ID(agent_ID);
+		at.setAmount(amount);
+		at.setDep_with('D');
+		at.setMU_ID(MU_ID);
+		
+		try {
+			accountManager.addMobilet(at, 'D', account_ID);
 			
-	      		// TODO Auto-generated catch block
-	      		e.printStackTrace();
-	      	}
+			AccountDAO check_balance_Manager = new 	SqlAccountDAO();
+			Account user = check_balance_Manager.getAccount(account_ID);
+		    long balance = user.getBalance(); 
+		    
+
+		     try {
+		    	 obj.put("report", "successful transaction");
+		    	 obj.put("account_ID", Integer.toString(account_ID));
+		    	 obj.put("balance", Long.toString(balance));
+		    	 
+		      
+		     }catch (JSONException e) {
+				
+		      	 e.printStackTrace();
+		     }
+			
+		    
+		}
+		catch (SQLException e1) {
+			
+			e1.printStackTrace();
+		     try {
+		    	 obj.put("report", "unsuccessful transaction. please try again");
+		 		      
+		     }catch (JSONException e) {
+				
+		      	// TODO Auto-generated catch block
+		      	 e.printStackTrace();
+		     }
+		}
 		return Response.ok()
 				.type(MediaType.APPLICATION_JSON)
 				.entity(obj)
 				.build();
+			
+	}
+	
+	
+	
+	
+
+	@POST
+	@Path("mWithdrawal")
+	@Produces(MediaType.APPLICATION_JSON)
+	public Response mobileWithdrawl(
+			@DefaultValue("") @HeaderParam("agent_ID") String agent_ID_arg,
+			@DefaultValue("") @HeaderParam("amount") String amount_arg,
+			@DefaultValue("") @HeaderParam("account_ID") String account_ID_arg,
+			@DefaultValue("") @HeaderParam("MU_ID") String MU_ID_arg)  {
+		//System.out.println("mobile deposit called");
+	     JSONObject obj = new JSONObject();
+	     
+			/*
+			 *  call mobile deposit functionality
+			 * 
+			 * */
+	    int agent_ID = Integer.parseInt(agent_ID_arg);
+	    int amount = Integer.parseInt(amount_arg);
+	    int account_ID = Integer.parseInt(account_ID_arg);
+	    int MU_ID = Integer.parseInt(MU_ID_arg);
+	    
+	    
+		MobileTDAO accountManager = new SqlMobileTDAO();
+		Mobilet at = new Mobilet();
+		at.setAgent_ID(agent_ID);
+		at.setAmount(amount);
+		at.setDep_with('W');
+		at.setMU_ID(MU_ID);
+		
+		try {
+			accountManager.addMobilet(at, 'W', account_ID);
+			
+			AccountDAO check_balance_Manager = new 	SqlAccountDAO();
+			Account user = check_balance_Manager.getAccount(account_ID);
+		    long balance = user.getBalance(); 
+		    
+
+		     try {
+		    	 obj.put("report", "successful transaction");
+		    	 obj.put("account_ID", Integer.toString(account_ID));
+		    	 obj.put("balance", Long.toString(balance));
+		    	 
+		      
+		     }catch (JSONException e) {
+				
+		      	// TODO Auto-generated catch block
+		      	 e.printStackTrace();
+		     }
+			
+		    
+		}
+		catch (SQLException e1) {
+			
+			e1.printStackTrace();
+		     try {
+		    	 obj.put("report", "unsuccessful transaction. please try again");
+		
+		     }catch (JSONException e) {
+				
+		      	 e.printStackTrace();
+		     }
+		}
+		return Response.ok()
+				.type(MediaType.APPLICATION_JSON)
+				.entity(obj)
+				.build();
+			
+		
+
 	}
 }
